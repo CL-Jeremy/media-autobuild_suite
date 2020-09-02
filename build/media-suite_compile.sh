@@ -13,6 +13,25 @@ if [[ -z $LOCALBUILDDIR ]]; then
     read -r -p "Enter to continue" ret
     exit 1
 fi
+
+downgrade_crt() {
+    msys_url() {
+        echo "http://repo.msys2.org/mingw/$2/mingw-w64-$2-$1-$3.pkg.tar.xz"
+    }
+
+    I686_CRT_PKG=7.0.0.5273.3e5acf5d-1-any
+
+    wget "$(msys_url libwinpthread-git i686 $I686_CRT_PKG)" -O libwinpthread-git.pkg.tar.xz
+    wget "$(msys_url winpthreads-git i686 $I686_CRT_PKG)" -O winpthreads-git.pkg.tar.xz
+
+    pacman -U --noconfirm libwinpthread-git.pkg.tar.xz winpthreads-git.pkg.tar.xz
+    rm libwinpthread-git.pkg.tar.xz winpthreads-git.pkg.tar.xz
+}
+
+grep -qE "\w*IgnorePkg\w*=.*\w*mingw-w64-i686-libwinpthread-git\w*mingw-w64-i686-winpthreads-git\w*.*" /etc/pacman.conf ||
+    sed -i '/\[options\]/a IgnorePkg = mingw-w64-i686-libwinpthread-git mingw-w64-i686-winpthreads-git' /etc/pacman.conf &&
+    downgrade_crt
+
 FFMPEG_BASE_OPTS=("--pkg-config-flags=--static" "--cc=$CC" "--cxx=$CXX")
 printf '\nBuild start: %(%F %T %z)T\n' -1 >> "$LOCALBUILDDIR/newchangelog"
 
@@ -218,7 +237,7 @@ fi
 
 _check=(libxml2.a libxml2/libxml/xmlIO.h libxml-2.0.pc)
 if { enabled libxml2 || [[ $cyanrip = y ]]; } &&
-    do_vcs "https://gitlab.gnome.org/GNOME/libxml2.git";then
+    do_vcs "https://gitlab.gnome.org/GNOME/libxml2.git#tag=v2.9.10";then
     do_uninstall include/libxml2/libxml "${_check[@]}"
     NOCONFIGURE=true do_autogen
     [[ -f config.mak ]] && log "distclean" make distclean
@@ -234,7 +253,7 @@ if [[ $mplayer = y || $mpv = y ]] ||
 
     _check=(libfreetype.{l,}a freetype2.pc)
     [[ $ffmpeg = sharedlibs ]] && _check+=(bin-video/libfreetype-6.dll libfreetype.dll.a)
-    if do_vcs "https://git.savannah.gnu.org/git/freetype/freetype2.git#tag=LATEST"; then
+    if do_vcs "https://git.savannah.gnu.org/git/freetype/freetype2.git#tag=VER-2-10-2"; then
         do_autogen
         do_uninstall include/freetype2 bin-global/freetype-config \
             bin{,-video}/libfreetype-6.dll libfreetype.dll.a "${_check[@]}"
@@ -276,7 +295,7 @@ if [[ $mplayer = y || $mpv = y ]] ||
 
     _deps=(libfreetype.a)
     _check=(libharfbuzz.a harfbuzz.pc)
-    if [[ $ffmpeg != sharedlibs ]] && do_vcs "https://github.com/harfbuzz/harfbuzz.git"; then
+    if [[ $ffmpeg != sharedlibs ]] && do_vcs "https://github.com/harfbuzz/harfbuzz.git#tag=2.7.2"; then
         do_pacman_install ragel
         do_uninstall include/harfbuzz "${_check[@]}"
         do_mesoninstall -D{glib,gobject,cairo,fontconfig,icu,tests,introspection,docs,benchmark}=disabled
@@ -287,7 +306,7 @@ if [[ $mplayer = y || $mpv = y ]] ||
     _check=(libfribidi.a fribidi.pc)
     [[ $standalone = y ]] && _check+=(bin-video/fribidi.exe)
     [[ $ffmpeg = sharedlibs ]] && _check+=(bin-video/libfribidi-0.dll libfribidi.dll.a)
-    if do_vcs "https://github.com/fribidi/fribidi.git#tag=LATEST"; then
+    if do_vcs "https://github.com/fribidi/fribidi.git#tag=v1.0.10"; then
         do_patch "https://github.com/fribidi/fribidi/pull/151.patch" am
         extracommands=("-Ddocs=false" "-Dtests=false")
         [[ $standalone = n ]] && extracommands+=("-Dbin=false")
@@ -488,7 +507,7 @@ _check=(libwebp{,mux}.{{,l}a,pc})
 [[ $standalone = y ]] && _check+=(libwebp{demux,decoder}.{{,l}a,pc}
     bin-global/{{c,d}webp,webpmux,img2webp}.exe)
 if [[ $ffmpeg != no || $standalone = y ]] && enabled libwebp &&
-    do_vcs "https://chromium.googlesource.com/webm/libwebp"; then
+    do_vcs "https://chromium.googlesource.com/webm/libwebp#tag=v1.1.0"; then
     if [[ $standalone = y ]]; then
         extracommands=(--enable-libwebp{demux,decoder,extras}
             "LIBS=$($PKG_CONFIG --libs libpng libtiff-4)")
@@ -539,7 +558,7 @@ unset opencldll
 if [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; then
     do_pacman_remove tesseract-ocr
     _check=(liblept.{,l}a lept.pc)
-    if do_vcs "https://github.com/DanBloomberg/leptonica.git#tag=LATEST"; then
+    if do_vcs "https://github.com/DanBloomberg/leptonica.git#tag=1.80.0"; then
         do_uninstall include/leptonica "${_check[@]}"
         [[ -f configure ]] || do_autogen
         do_separate_confmakeinstall --disable-programs --without-{lib{openjpeg,webp},giflib}
@@ -1036,7 +1055,7 @@ unset _aom_bins
 _check=(dav1d/dav1d.h dav1d.pc libdav1d.a)
 [[ $standalone = y ]] && _check+=(bin-video/dav1d.exe)
 if { [[ $dav1d = y ]] || [[ $libavif = y ]] || { [[ $ffmpeg != no ]] && enabled libdav1d; }; } &&
-    do_vcs "https://code.videolan.org/videolan/dav1d.git"; then
+    do_vcs "https://code.videolan.org/videolan/dav1d.git#484d6595afc4d155ffe4dca2bbcdb01d77f8f198"; then
     do_uninstall include/dav1d "${_check[@]}"
     extracommands=()
     [[ $standalone = y ]] || extracommands=("-Denable_tools=false")
@@ -1280,7 +1299,7 @@ if [[ $mediainfo = y ]]; then
 
     _check=(libmediainfo.{a,pc})
     _deps=(lib{zen,curl}.a)
-    if do_vcs "https://github.com/MediaArea/MediaInfoLib.git" libmediainfo; then
+    if do_vcs "https://github.com/MediaArea/MediaInfoLib.git#tag=v20.08" libmediainfo; then
         do_uninstall include/MediaInfo{,DLL} bin-global/libmediainfo-config \
             "${_check[@]}" libmediainfo.la lib/cmake/mediainfolib
         do_cmakeinstall Project/CMake -DBUILD_ZLIB=off -DBUILD_ZENLIB=off
@@ -1290,7 +1309,7 @@ if [[ $mediainfo = y ]]; then
 
     _check=(bin-video/mediainfo.exe)
     _deps=(libmediainfo.a)
-    if do_vcs "https://github.com/MediaArea/MediaInfo.git" mediainfo; then
+    if do_vcs "https://github.com/MediaArea/MediaInfo.git#tag=v20.08" mediainfo; then
         cd_safe Project/GNU/CLI
         do_autogen
         do_uninstall "${_check[@]}"
@@ -1436,7 +1455,7 @@ if [[ $x264 != no ]]; then
     _check=(x264{,_config}.h libx264.a x264.pc)
     [[ $standalone = y ]] && _check+=(bin-video/x264.exe)
     _bitdepth=$(get_api_version x264_config.h BIT_DEPTH)
-    if do_vcs "https://code.videolan.org/videolan/x264.git" ||
+    if do_vcs "https://code.videolan.org/videolan/x264.git#branch=stable" ||
         [[ $x264 = o8   && $_bitdepth =~ (0|10) ]] ||
         [[ $x264 = high && $_bitdepth =~ (0|8) ]] ||
         [[ $x264 =~ (yes|full|shared|fullv) && "$_bitdepth" != 0 ]]; then
@@ -1450,7 +1469,7 @@ if [[ $x264 != no ]]; then
         unset_extra_script
         if [[ $standalone = y && $x264 =~ (full|fullv) ]]; then
             _check=("$LOCALDESTDIR"/opt/lightffmpeg/lib/pkgconfig/libav{codec,format}.pc)
-            do_vcs "https://git.ffmpeg.org/ffmpeg.git"
+            do_vcs "https://git.ffmpeg.org/ffmpeg.git#tag=n4.3.1"
             do_uninstall "$LOCALDESTDIR"/opt/lightffmpeg
             [[ -f config.mak ]] && log "distclean" make distclean
             create_build_dir light
@@ -1546,7 +1565,7 @@ fi
 
 _check=(x265{,_config}.h libx265.a x265.pc)
 [[ $standalone = y ]] && _check+=(bin-video/x265.exe)
-if [[ ! $x265 = n ]] && do_vcs "https://bitbucket.org/multicoreware/x265_git.git"; then
+if [[ ! $x265 = n ]] && do_vcs "https://bitbucket.org/multicoreware/x265_git.git#tag=3.4"; then
     do_uninstall libx265{_main10,_main12}.a bin-video/libx265_main{10,12}.dll "${_check[@]}"
     [[ $bits = 32bit ]] && assembly=-DENABLE_ASSEMBLY=OFF
     [[ $x265 = d ]] && xpsupport=-DWINXP_SUPPORT=ON
@@ -1656,7 +1675,7 @@ fi
 _check=(ffnvcodec/nvEncodeAPI.h ffnvcodec.pc)
 if [[ $ffmpeg != no ]] && { enabled ffnvcodec ||
     ! disabled_any ffnvcodec autodetect || ! mpv_disabled cuda-hwaccel; } &&
-    do_vcs "https://git.videolan.org/git/ffmpeg/nv-codec-headers.git" ffnvcodec; then
+    do_vcs "https://git.videolan.org/git/ffmpeg/nv-codec-headers.git#tag=n10.0.26.0" ffnvcodec; then
     do_makeinstall PREFIX="$LOCALDESTDIR"
     do_checkIfExist
 fi
@@ -1895,7 +1914,7 @@ if [[ $ffmpeg != no ]]; then
     # todo: make this more easily customizable
     [[ $ffmpegUpdate = y ]] && enabled_any lib{aom,tesseract,vmaf,x265,vpx} &&
         _deps=(lib{aom,tesseract,vmaf,x265,vpx}.a)
-    if do_vcs "https://git.ffmpeg.org/ffmpeg.git"; then
+    if do_vcs "https://git.ffmpeg.org/ffmpeg.git#tag=n4.3.1"; then
 
         do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0001-glslang-add-MachineIndependent.patch" am
 
@@ -1933,6 +1952,16 @@ if [[ $ffmpeg != no ]]; then
                 do_addOption "--extra-cflags=$_openal_flag"
             done
             unset _openal_flag
+        fi
+
+        if disabled bcrypt-x86win; then
+            do_removeOption "--disable-bcrypt-x86win"
+            do_removeOption FFMPEG_OPTS_SHARED "--disable-bcrypt-x86win"
+            if [[ $bits = 32bit ]] &&
+                do_patch "https://raw.githubusercontent.com/Reino17/ffmpeg-windows-build-helpers/master/patches/ffmpeg_make-bcrypt-optional.patch"; then
+                    do_addOption "--disable-bcrypt"
+                    do_addOption FFMPEG_OPTS_SHARED "--disable-bcrypt"      
+            fi
         fi
 
         _patches=$(git rev-list origin/master.. --count)
@@ -2092,7 +2121,7 @@ if [[ $mplayer = y ]] && check_mplayer_updates; then
     if [[ ! -d ffmpeg ]] &&
         ! { [[ -d $LOCALBUILDDIR/ffmpeg-git ]] &&
         git clone -q "$LOCALBUILDDIR/ffmpeg-git" ffmpeg; } &&
-        ! git clone "https://git.ffmpeg.org/ffmpeg.git" ffmpeg; then
+        ! git clone "https://git.ffmpeg.org/ffmpeg.git#tag=n4.3.1" ffmpeg; then
         rm -rf ffmpeg
         printf '%s\n' \
             "Failed to get a FFmpeg checkout" \
@@ -2406,7 +2435,7 @@ if [[ $cyanrip = y ]]; then
     if do_vcs "https://github.com/cyanreg/cyanrip.git"; then
         old_PKG_CONFIG_PATH=$PKG_CONFIG_PATH
         _check=("$LOCALDESTDIR"/opt/cyanffmpeg/lib/pkgconfig/libav{codec,format}.pc)
-        if flavor=cyan do_vcs "https://git.ffmpeg.org/ffmpeg.git"; then
+        if flavor=cyan do_vcs "https://git.ffmpeg.org/ffmpeg.git#tag=n4.3.1"; then
             do_uninstall "$LOCALDESTDIR"/opt/cyanffmpeg
             [[ -f config.mak ]] && log "distclean" make distclean
             mapfile -t cyan_ffmpeg_opts < <(
