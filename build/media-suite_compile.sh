@@ -16,21 +16,23 @@ fi
 
 downgrade_crt() {
     msys_url() {
-        echo "http://repo.msys2.org/mingw/$2/mingw-w64-$2-$1-$3.pkg.tar.xz"
+        echo "http://repo.msys2.org/mingw/$2/mingw-w64-$2-$1-$3-any.pkg.tar.xz"
     }
+    
+    I686_CRT_PKGVER=7.0.0.5233.e0c09544-1
+    I686_PTH_PKGVER=7.0.0.5273.3e5acf5d-1
+    [[ $1 =~ pth ]] && VER=$I686_PTH_PKGVER || VER=$I686_CRT_PKGVER
+    wget "$(msys_url $1-git i686 $VER)" -O $1-git.pkg.tar.xz
 
-    I686_CRT_PKG=7.0.0.5273.3e5acf5d-1-any
-
-    wget "$(msys_url libwinpthread-git i686 $I686_CRT_PKG)" -O libwinpthread-git.pkg.tar.xz
-    wget "$(msys_url winpthreads-git i686 $I686_CRT_PKG)" -O winpthreads-git.pkg.tar.xz
-
-    pacman -U --noconfirm libwinpthread-git.pkg.tar.xz winpthreads-git.pkg.tar.xz
-    rm libwinpthread-git.pkg.tar.xz winpthreads-git.pkg.tar.xz
+    pacman -U --noconfirm $1-git.pkg.tar.xz
+    rm $1-git.pkg.tar.xz
 }
 
-grep -qE "\w*IgnorePkg\w*=.*\w*mingw-w64-i686-libwinpthread-git\w*mingw-w64-i686-winpthreads-git\w*.*" /etc/pacman.conf ||
-    sed -i '/\[options\]/a IgnorePkg = mingw-w64-i686-libwinpthread-git mingw-w64-i686-winpthreads-git' /etc/pacman.conf &&
-    downgrade_crt
+for pkg in libwinpthread winpthreads crt headers; do
+    grep -qE '\s*IgnorePkg\s*=.*\s*mingw-w64-i686-'"$pkg-git"'\s*.*' /etc/pacman.conf ||
+        sed -i '/\[options\]/a IgnorePkg = mingw-w64-i686-'"$pkg-git" /etc/pacman.conf &&
+            downgrade_crt $pkg
+done
 
 FFMPEG_BASE_OPTS=("--pkg-config-flags=--static" "--cc=$CC" "--cxx=$CXX")
 printf '\nBuild start: %(%F %T %z)T\n' -1 >> "$LOCALBUILDDIR/newchangelog"
